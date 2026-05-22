@@ -163,7 +163,7 @@ def test_jazz_wider_than_edm(tmp_path):
 
 ### Build System
 
-`setup.py` with `setuptools`. Dependencies: `mido>=1.3`, `numpy>=1.24`, `matplotlib>=3.8`.
+`pyproject.toml` with `setuptools`. Dependencies: `mido>=1.3`, `numpy>=1.24`, `matplotlib>=3.8`.
 
 ```bash
 pip install -e .           # install in development

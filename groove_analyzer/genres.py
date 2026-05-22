@@ -103,21 +103,23 @@ GENRE_PROFILES: Dict[str, GenreProfile] = {
 
 
 def _random_offset(profile: GenreProfile) -> float:
-    """Draw a microtiming offset in ms from the genre's distribution."""
-    low, high = profile.epsilon_range
+    """Draw a microtiming offset in ms from the genre's distribution.
+
+    The distribution is centred on ``ahead_bias`` with a spread
+    calibrated so that the 90th-percentile of |offset| is approximately
+    ``epsilon_ms``.  This ensures that ``fit_deadband`` can recover
+    ``epsilon_ms`` from the synthesised MIDI in a round-trip test.
+    """
+    eps = profile.epsilon_ms
+    bias = profile.ahead_bias
     if profile.distribution == "uniform":
-        return (
-            random.uniform(low, high)
-            * random.choice((-1, 1))
-            + profile.ahead_bias
-        )
+        return random.uniform(-eps, eps) + bias
     if profile.distribution == "triangular":
-        # Triangular centred on bias, width = epsilon_range
-        mode = profile.ahead_bias
-        return random.triangular(low - abs(mode), high + abs(mode), mode)
-    # gaussian
-    sigma = (high - low) / 4.0
-    return random.gauss(profile.ahead_bias, sigma)
+        # Symmetric triangular on [-eps, eps], then shift by bias
+        return random.triangular(-eps, eps, 0.0) + bias
+    # gaussian: sigma chosen so that ~90 % of |N(bias, sigma)| < eps
+    sigma = eps / 2.0
+    return random.gauss(bias, sigma)
 
 
 def _swing_beat(beat: float, swing: float, bpm: float) -> float:
@@ -232,11 +234,16 @@ def _build_instrument_track(  # pylint: disable=too-many-locals
                     channel=channel,
                 )
             )
-            # Note-off 100 ticks later
+            # Note-off: use a short duration to avoid overlapping
+            # note_on events when grid spacing is tight.  30 ticks ≈ 31 ms
+            # at 120 BPM / 480 tpb, well under the minimum 16th-note gap.
+            note_off_ticks = min(30, max(1, tpb // 16 - 1))
             track.append(
-                mido.Message("note_off", note=pitch, velocity=0, time=100)
+                mido.Message(
+                    "note_off", note=pitch, velocity=0, time=note_off_ticks
+                )
             )
-            prev_tick = tick + 100
+            prev_tick = tick + note_off_ticks
 
     track.append(mido.MetaMessage("end_of_track", time=0))
     return track
