@@ -322,7 +322,7 @@ def _build_tracks(  # pylint: disable=too-many-arguments,too-many-positional-arg
 
 def extract_microtiming(
     path: Path | str,
-    grid_division: int = 16,
+    grid_division: int = 4,
     pocket_ms: Optional[float] = None,
 ) -> GrooveTiming:
     """Analyse microtiming in a MIDI file.
@@ -345,11 +345,36 @@ def extract_microtiming(
         raise ValueError("grid_division must be positive")
 
     mid = mido.MidiFile(str(path))
+
+    if not mid.tracks:
+        raise ValueError(
+            f"MIDI file '{path}' contains no tracks — nothing to analyse."
+        )
+
     tpb = mid.ticks_per_beat
     tempo_map = _build_tempo_map(mid)
     bpm = 60_000_000.0 / tempo_map[0][1]
 
     track_events = _gather_track_events(mid)
+
+    if not track_events:
+        import warnings
+        warnings.warn(
+            f"MIDI file '{path}' contains no note_on events — "
+            "returning empty GrooveTiming.",
+            stacklevel=2,
+        )
+        return GrooveTiming(
+            bpm=bpm,
+            ticks_per_beat=tpb,
+            grid_division=grid_division,
+            tracks=[],
+            global_avg_offset_ms=0.0,
+            global_std_offset_ms=0.0,
+            global_pocket_width_ms=0.0,
+            global_swing_factor=0.0,
+        )
+
     tracks, all_onsets = _build_tracks(
         track_events, tempo_map, tpb, grid_division, bpm, pocket_ms
     )

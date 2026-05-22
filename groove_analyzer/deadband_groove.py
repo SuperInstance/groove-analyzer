@@ -147,15 +147,24 @@ def fit_deadband(
 
 
 def _match_genre(epsilon: float) -> Optional[str]:
-    """Return closest genre based on e ranges."""
-    profiles = [
-        ("EDM", 3.0),
-        ("Funk", 15.0),
-        ("Hip-hop", 20.0),
-        ("Latin", 30.0),
-        ("Jazz", 40.0),
-    ]
-    return min(profiles, key=lambda g: abs(g[1] - epsilon))[0]
+    """Return closest genre based on e ranges and centres."""
+    from .genres import GENRE_PROFILES
+    best: Optional[str] = None
+    best_score = float("inf")
+    for name, prof in GENRE_PROFILES.items():
+        lo, hi = prof.epsilon_range
+        centre = prof.epsilon_ms
+        if lo <= epsilon <= hi:
+            # Inside the range: score by distance to centre
+            score = abs(epsilon - centre) / (hi - lo + 1e-9)
+        else:
+            # Outside the range: penalise by distance to nearest bound
+            dist = min(abs(epsilon - lo), abs(epsilon - hi))
+            score = 1.0 + dist / (centre + 1e-9)
+        if score < best_score:
+            best_score = score
+            best = name
+    return best
 
 
 def build_funnel(

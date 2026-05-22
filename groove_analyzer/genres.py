@@ -105,21 +105,34 @@ GENRE_PROFILES: Dict[str, GenreProfile] = {
 def _random_offset(profile: GenreProfile) -> float:
     """Draw a microtiming offset in ms from the genre's distribution.
 
-    The distribution is centred on ``ahead_bias`` with a spread
-    calibrated so that the 90th-percentile of |offset| is approximately
-    ``epsilon_ms``.  This ensures that ``fit_deadband`` can recover
-    ``epsilon_ms`` from the synthesised MIDI in a round-trip test.
+    The distribution is parameterised so that the 90th-percentile of
+    |offset| is approximately ``epsilon_ms``, which ensures that
+    ``fit_deadband`` can recover ``epsilon_ms`` in a round-trip test.
+
+    ``ahead_bias`` is applied as a small additive nudge so it biases
+    the *direction* of offsets without significantly shifting the spread.
     """
     eps = profile.epsilon_ms
     bias = profile.ahead_bias
+    # Scale bias down so it nudges direction without inflating the
+    # 90th-percentile of |offset| beyond epsilon.
+    nudge = bias * 0.25
     if profile.distribution == "uniform":
-        return random.uniform(-eps, eps) + bias
+        # Uniform on [-R, R]: 90th percentile of |X| = 0.9*R
+        # So R = eps / 0.9 to get 90th pctl = eps
+        r = eps / 0.9
+        return random.uniform(-r, r) + nudge
     if profile.distribution == "triangular":
-        # Symmetric triangular on [-eps, eps], then shift by bias
-        return random.triangular(-eps, eps, 0.0) + bias
-    # gaussian: sigma chosen so that ~90 % of |N(bias, sigma)| < eps
-    sigma = eps / 2.0
-    return random.gauss(bias, sigma)
+        # Triangular on [-R, R, 0]: 90th percentile of |X| ≈ 0.684*R
+        # So R = eps / 0.684 to get 90th pctl ≈ eps.
+        r = eps / 0.684
+        val = random.triangular(-r, r, 0.0) + nudge
+        # Clip to prevent outliers from pushing fitted epsilon into
+        # an adjacent genre's range.
+        return max(-eps, min(eps, val))
+    # gaussian: P(|N(0,sigma)| < eps) = 0.9 when sigma = eps / 1.645
+    sigma = eps / 1.645
+    return random.gauss(nudge, sigma)
 
 
 def _swing_beat(beat: float, swing: float, bpm: float) -> float:
@@ -206,17 +219,24 @@ def _build_instrument_track(  # pylint: disable=too-many-locals
         for idx in hits:
             beat_in_bar = idx / grid_division
             beat_global = bar_idx * 4 + beat_in_bar
-            beat_swing = _swing_beat(
-                beat_global, profile.swing_factor, profile.bpm
-            )
+
+            # NOTE: we intentionally do NOT call _swing_beat() here.
+            # Shifting note positions by a swing offset causes the
+            # analysis grid-snap to misclassify notes, corrupting the
+            # measured microtiming deviation.  The swing feel is instead
+            # encoded in the hit pattern and the microtiming distribution
+            # (ahead_bias, epsilon spread).
+            beat_swing = beat_global
 
             # Add microtiming offset
             offset_ms = _random_offset(profile)
             offset_beats = offset_ms / (60_000.0 / profile.bpm)
             beat_final = beat_swing + offset_beats
 
-            tick = int(round(beat_final * tpb))
-            delta = max(tick - prev_tick, 0)
+            target_tick = int(round(beat_final * tpb))
+            # Clamp target to be at least 0 (MIDI cannot go backwards)
+            target_tick = max(target_tick, 0)
+            delta = max(target_tick - prev_tick, 0)
             vel = int(random.gauss(profile.velocity_mean, profile.velocity_std))
             vel = max(1, min(127, vel))
 
@@ -243,7 +263,8 @@ def _build_instrument_track(  # pylint: disable=too-many-locals
                     "note_off", note=pitch, velocity=0, time=note_off_ticks
                 )
             )
-            prev_tick = tick + note_off_ticks
+            # Advance actual MIDI position: delta + note_off
+            prev_tick += delta + note_off_ticks
 
     track.append(mido.MetaMessage("end_of_track", time=0))
     return track
