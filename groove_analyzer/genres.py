@@ -8,6 +8,7 @@ a random offset drawn from the genre's deadband distribution.
 
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +31,22 @@ class GenreProfile:  # pylint: disable=too-many-instance-attributes
     # Microtiming distribution: "uniform", "triangular", "gaussian"
     distribution: str
     ahead_bias: float       # mean offset in ms (negative = ahead, positive = behind)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.epsilon_ms, (int, float)) or (
+            isinstance(self.epsilon_ms, float)
+            and (math.isnan(self.epsilon_ms) or math.isinf(self.epsilon_ms))
+        ):
+            raise ValueError(f"epsilon_ms must be a finite positive number, got {self.epsilon_ms!r}")
+        if self.epsilon_ms <= 0:
+            raise ValueError(f"epsilon_ms must be positive, got {self.epsilon_ms}")
+        if not isinstance(self.bpm, (int, float)) or (
+            isinstance(self.bpm, float)
+            and (math.isnan(self.bpm) or math.isinf(self.bpm))
+        ):
+            raise ValueError(f"bpm must be a finite positive number, got {self.bpm!r}")
+        if self.bpm <= 0:
+            raise ValueError(f"bpm must be positive, got {self.bpm}")
 
     def __repr__(self) -> str:
         return (

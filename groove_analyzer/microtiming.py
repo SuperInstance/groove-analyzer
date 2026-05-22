@@ -38,6 +38,16 @@ class OnsetEvent:  # pylint: disable=too-many-instance-attributes
     deviation_ms: float   # deviation from grid in ms (+ = behind, - = ahead)
     timing_class: TimingClass = TimingClass.POCKET
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.time_sec, (int, float)):
+            raise TypeError(
+                f"time_sec must be a number, got {type(self.time_sec).__name__}"
+            )
+        if isinstance(self.time_sec, float) and (
+            math.isnan(self.time_sec) or math.isinf(self.time_sec)
+        ):
+            raise ValueError(f"time_sec must be finite, got {self.time_sec}")
+
     def __repr__(self) -> str:
         return (
             f"OnsetEvent(beat={self.beat:.3f}, dev={self.deviation_ms:.2f}ms, "

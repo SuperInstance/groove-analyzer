@@ -1,4 +1,5 @@
-setup.py
+README.md
+pyproject.toml
 groove_analyzer/__init__.py
 groove_analyzer/deadband_groove.py
 groove_analyzer/genres.py
