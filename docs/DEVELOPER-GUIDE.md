@@ -1,255 +1,171 @@
-# groove-analyzer — Developer Guide
+# Groove Analyzer — Developer Guide
 
 ## Architecture
 
-### Module Responsibilities
+```
+groove_analyzer/
+├── __init__.py            # Version + package marker
+├── microtiming.py         # MIDI → timing data extraction
+├── deadband_groove.py     # Deadband fitting + funnel building
+├── genres.py              # Genre profiles + synthetic MIDI generation
+├── visualize.py           # Matplotlib funnel/comparison plots
+tests/
+├── test_microtiming.py    # Extraction + genre synthesis tests
+├── test_visualize.py      # Plot smoke tests
+analyze_grooves.py         # CLI report generator
+```
 
-| Module | Responsibility |
-|--------|----------------|
-| `microtiming.py` | MIDI parsing, onset extraction, grid quantization, timing classification |
-| `deadband_groove.py` | Deadband fitting, funnel construction, proof metrics. Pure computation. |
-| `genres.py` | Genre profiles, synthetic groove generation, MIDI file output |
-| `visualize.py` | Matplotlib funnel plots. Depends on all three other modules. |
+### Module Diagram
+
+```
+┌──────────────┐     ┌─────────────────┐     ┌──────────────┐
+│  genres.py   │────▶│  microtiming.py │────▶│deadband_     │
+│ (synth MIDI) │     │ (extract timing)│     │  groove.py   │
+└──────────────┘     └────────┬────────┘     │(fit ε, build │
+                              │              │ funnel, prove)│
+                              │              └──────┬───────┘
+                     ┌────────▼────────┐            │
+                     │  visualize.py   │◀───────────┘
+                     │ (matplotlib)    │
+                     └─────────────────┘
+```
 
 ### Data Flow
 
-```
-MIDI file (.mid)
-      │
-      ▼
-┌──────────────────────────┐
-│ microtiming.py           │
-│                          │
-│ _build_tempo_map()       │  Parse tempo events
-│ _tick_to_seconds()       │  Convert ticks → seconds
-│ _snap_to_grid()          │  Quantize to grid
-│ _classify_deviation()    │  Ahead/Behind/Pocket
-│ _compute_swing()         │  Swing factor estimation
-│                          │
-│ extract_microtiming()    │
-│   → GrooveTiming         │
-│     .tracks → TrackTiming[]│
-│       .onsets → OnsetEvent[]│
-└──────────┬───────────────┘
-           │
-           ▼
-┌──────────────────────────┐
-│ deadband_groove.py       │
-│                          │
-│ fit_deadband()           │  → DeadbandFit
-│   _match_genre()         │  ε → closest genre
-│                          │
-│ build_funnel()           │  → EnsembleFunnel
-│   ε(t) = ε₀·e^(-λt)    │  Exponential decay
-│   PlayerState per onset  │  narrowing/approach/anomaly
-│                          │
-│ prove_groove_is_deadband │  → {coverage, variance_collapse, genre_coherence}
-└──────────┬───────────────┘
-           │
-     ┌─────┴──────┐
-     ▼            ▼
-┌──────────┐ ┌──────────────┐
-│ genres.py│ │ visualize.py │
-│          │ │              │
-│ synthesize_ │ │ plot_deadband_│
-│ groove() │ │ funnel()     │
-│          │ │ plot_groove_ │
-│ generate_ │ │ comparison() │
-│ all_genre│ │              │
-│ _examples│ │ Uses matplotlib│
-│          │ │ for rendering │
-│ GENRE_   │ └──────────────┘
-│ PROFILES │
-└──────────┘
-```
+1. MIDI file → `extract_microtiming()` → `GrooveTiming` (per-track onsets with deviations)
+2. `GrooveTiming` → `fit_deadband()` → `DeadbandFit` (ε, δ, coverage, genre match)
+3. `GrooveTiming` → `build_funnel()` → `EnsembleFunnel` (per-player phase trajectory)
+4. Any of the above → `visualize.py` → matplotlib figures
 
-### Key Design Decisions
+## Extending
 
-1. **MIDI as input, not audio.** Microtiming extraction from MIDI is deterministic and doesn't require onset detection. Audio support could be added as a separate front-end.
+### Adding a New Genre Profile
 
-2. **Grid-based quantization.** Onsets are snapped to a regular grid (16th notes by default). The deviation from the grid is the microtiming offset. This is standard in musicology.
-
-3. **Deadband from coverage, not from theory.** We fit ε to achieve a target coverage (default 90%) rather than imposing a theoretical value. This is data-driven.
-
-4. **Exponential funnel decay.** The narrowing funnel models how ensembles converge over time. The decay rate λ controls how fast.
-
-5. **Genre profiles as references, not classifiers.** The genre match is the nearest profile by ε. It's a descriptive statistic, not a machine learning classifier.
-
----
-
-## How to Extend
-
-### Add a New Genre Profile
-
-Add an entry to `GENRE_PROFILES` in `genres.py`:
+Add to `GENRE_PROFILES` in `genres.py`:
 
 ```python
 GENRE_PROFILES["Rock"] = GenreProfile(
     name="Rock",
     epsilon_ms=12.0,
     epsilon_range=(8.0, 18.0),
-    swing_factor=0.10,
+    swing_factor=0.05,
     pocket_description="driving, slightly ahead",
     bpm=130.0,
     velocity_mean=95,
-    velocity_std=12,
+    velocity_std=8,
     distribution="gaussian",
-    ahead_bias=-3.0,  # rock drummers often push
+    ahead_bias=-3.0,  # rock drummers push
 )
 ```
 
-Then update `_match_genre()` in `deadband_groove.py` to include the new genre in its lookup list.
+The genre will automatically be available in `synthesize_groove("Rock", ...)` and `generate_all_genre_examples()`.
 
-### Add a New Microtiming Feature
+### Adding a New Timing Feature
 
-Features are computed in `extract_microtiming()` or in post-processing. To add, e.g., syncopation detection:
-
-1. Add a field to `TrackTiming` or `GrooveTiming`.
-2. Compute it in the loop inside `extract_microtiming()`.
-3. Add it to the output.
-
-Example:
+Add to `microtiming.py` as a function that takes `GrooveTiming`:
 
 ```python
-@dataclass
-class TrackTiming:
-    # ... existing fields ...
-    syncopation_index: float = 0.0  # NEW
-
-def _compute_syncopation(onsets, grid_division):
-    """Ratio of off-beat onsets to total onsets."""
-    if not onsets:
+def compute_groove_entropy(timing: GrooveTiming) -> float:
+    """Measure the information-theoretic entropy of timing deviations."""
+    import math
+    devs = [o.deviation_ms for t in timing.tracks for o in t.onsets]
+    if not devs:
         return 0.0
-    offbeat = sum(1 for o in onsets if round(o.beat * grid_division) % grid_division != 0)
-    return offbeat / len(onsets)
+    # Bin into histogram
+    n_bins = 20
+    counts = [0] * n_bins
+    for d in devs:
+        idx = min(n_bins - 1, max(0, int((d + 50) / 100 * n_bins)))
+        counts[idx] += 1
+    total = sum(counts)
+    entropy = -sum((c/total) * math.log2(c/total) for c in counts if c > 0)
+    return entropy
 ```
 
-### Add a New Visualization
+### Adding a New Deadband Model
 
-Add a function to `visualize.py`:
+Extend `deadband_groove.py`:
 
 ```python
-def plot_deviation_histogram(
+def fit_adaptive_deadband(timing: GrooveTiming) -> AdaptiveDeadbandFit:
+    """Fit a deadband that varies over time (non-stationary ε)."""
+    # Segment the timing data and fit ε per segment
+    ...
+```
+
+### Adding a New Visualization
+
+Follow the pattern in `visualize.py`:
+
+```python
+def plot_offset_histogram(
     timing: GrooveTiming,
-    bins: int = 50,
-    save_path: Optional[Path] = None,
+    save_path: Path | str | None = None,
 ) -> plt.Figure:
-    """Histogram of microtiming deviations across all tracks."""
     fig, ax = plt.subplots()
-    all_devs = [o.deviation_ms for t in timing.tracks for o in t.onsets]
-    ax.hist(all_devs, bins=bins, edgecolor="black", alpha=0.7)
-    ax.set_xlabel("Deviation (ms)")
+    for track in timing.tracks:
+        devs = [o.deviation_ms for o in track.onsets]
+        ax.hist(devs, bins=30, alpha=0.5, label=track.track_name)
+    ax.set_xlabel("Offset (ms)")
     ax.set_ylabel("Count")
+    ax.legend()
     if save_path:
         fig.savefig(str(save_path), dpi=150)
     return fig
 ```
-
-### Add a Custom Funnel Model
-
-The default funnel is exponential decay. To add, e.g., a linear funnel:
-
-```python
-def build_linear_funnel(timing, epsilon_0, decay_per_beat):
-    """Linear deadband narrowing: ε(t) = max(0, ε₀ - decay·t)"""
-    # Similar to build_funnel but with linear decay
-    ...
-```
-
----
 
 ## Testing
 
 ### Running Tests
 
 ```bash
-cd groove-analyzer
-pytest                          # all tests (11/11 pass ✅)
-pytest tests/test_microtiming.py
-pytest tests/test_visualize.py
+pytest                          # all tests
+pytest tests/test_microtiming.py  # timing + deadband + genre tests
+pytest tests/test_visualize.py    # plot smoke tests
+pytest -v                        # verbose
+pytest --cov=groove_analyzer     # coverage
 ```
 
 ### Test Structure
 
-| File | What it tests |
-|------|---------------|
-| `test_microtiming.py` | Onset extraction, grid snapping, timing classification, swing computation |
-| `test_visualize.py` | Plot generation, figure dimensions, save behavior |
-
-### Writing New Tests
-
-Follow the existing pattern:
+Tests generate synthetic MIDI via `synthesize_groove()`, extract timing, and verify properties:
 
 ```python
-import pytest
-from pathlib import Path
-from groove_analyzer.microtiming import extract_microtiming
-from groove_analyzer.deadband_groove import fit_deadband
-
-def test_fit_deadband_coverage():
-    """Fitted deadband should achieve at least the target coverage."""
-    timing = extract_microtiming("test_data/funk.mid")
-    fit = fit_deadband(timing, coverage_target=0.90)
-    assert fit.coverage >= 0.90
-
-def test_genre_match():
-    """Known genre file should match its genre profile."""
-    timing = extract_microtiming("test_data/edm.mid")
-    fit = fit_deadband(timing)
-    assert fit.genre_match == "EDM"
+def test_jazz_wider_than_edm(tmp_path):
+    """Jazz deadband should be wider than EDM."""
+    edm = synthesize_groove("EDM", bars=4, seed=1, output_path=tmp_path / "e.mid")
+    jazz = synthesize_groove("Jazz", bars=4, seed=1, output_path=tmp_path / "j.mid")
+    fit_edm = fit_deadband(extract_microtiming(tmp_path / "e.mid"))
+    fit_jazz = fit_deadband(extract_microtiming(tmp_path / "j.mid"))
+    assert fit_jazz.epsilon_ms > fit_edm.epsilon_ms
 ```
 
-### Testing Philosophy
+### Adding Tests
 
-- **Test with real MIDI data.** Generate test fixtures via `synthesize_groove()` with fixed seeds.
-- **Test properties, not exact values.** Coverage should exceed target, not equal a specific number.
-- **Round-trip tests.** Generate → extract → fit → verify the genre matches.
-- **All 11 tests pass.** No known failures.
-
----
+1. Use `synthesize_groove()` to create test fixtures (no external MIDI files needed)
+2. Test invariants, not exact values (timing depends on RNG)
+3. Use `tmp_path` fixture for file output
 
 ## Contributing
 
-1. Fork the repo.
-2. Create a feature branch: `git checkout -b feature/syncopation-index`.
-3. Add code + tests. New features need test coverage.
-4. Run `pytest` — all tests must pass.
-5. Submit a PR.
+1. Fork, branch, implement, test, PR
+2. All new features need tests
+3. Visualization functions must work with `matplotlib.use("Agg")` (headless)
+4. Follow existing naming: `snake_case` for functions, `PascalCase` for classes
 
 ### Code Style
 
-- **Type hints everywhere.** All public functions have full type annotations.
-- **Docstrings with Parameters/Returns sections.** NumPy convention.
-- **Dataclasses for structured data.** No raw dicts where a dataclass makes sense.
-- **No global state.** Functions are pure where possible.
-- **mido for MIDI I/O.** No other MIDI libraries.
+- Python 3.9+ type hints
+- Dataclasses for structured return types
+- `from __future__ import annotations` in all modules
+- Docstrings with Parameters/Returns on all public functions
+- `mido` for MIDI I/O, `numpy` for numerical work, `matplotlib` for plots
 
-### Commit Messages
+### Build System
 
-```
-feat: add Rock genre profile
-fix: correct swing calculation for triple-meter files
-docs: add histogram visualization recipe
-test: add round-trip test for EDM generation
-```
+`setup.py` with `setuptools`. Dependencies: `mido>=1.3`, `numpy>=1.24`, `matplotlib>=3.8`.
 
-### Project Structure
-
-```
-groove-analyzer/
-├── groove_analyzer/
-│   ├── __init__.py
-│   ├── microtiming.py      # Core extraction
-│   ├── deadband_groove.py  # Deadband theory
-│   ├── genres.py           # Profiles + generation
-│   └── visualize.py        # Matplotlib plots
-├── tests/
-│   ├── test_microtiming.py
-│   └── test_visualize.py
-├── analyze_grooves.py      # CLI script
-├── setup.py
-├── README.md
-└── docs/
-    ├── USER-GUIDE.md
-    └── DEVELOPER-GUIDE.md
+```bash
+pip install -e .           # install in development
+pip install -e ".[dev]"    # with pytest
 ```
