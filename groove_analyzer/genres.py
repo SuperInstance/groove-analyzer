@@ -33,6 +33,8 @@ class GenreProfile:  # pylint: disable=too-many-instance-attributes
     ahead_bias: float       # mean offset in ms (negative = ahead, positive = behind)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError(f"name must be a non-empty string, got {self.name!r}")
         if not isinstance(self.epsilon_ms, (int, float)) or (
             isinstance(self.epsilon_ms, float)
             and (math.isnan(self.epsilon_ms) or math.isinf(self.epsilon_ms))
@@ -40,6 +42,10 @@ class GenreProfile:  # pylint: disable=too-many-instance-attributes
             raise ValueError(f"epsilon_ms must be a finite positive number, got {self.epsilon_ms!r}")
         if self.epsilon_ms <= 0:
             raise ValueError(f"epsilon_ms must be positive, got {self.epsilon_ms}")
+        if not isinstance(self.velocity_std, (int, float)) or self.velocity_std < 0:
+            raise ValueError(f"velocity_std must be non-negative, got {self.velocity_std!r}")
+        if not isinstance(self.swing_factor, (int, float)) or not (0.0 <= self.swing_factor <= 1.0):
+            raise ValueError(f"swing_factor must be between 0.0 and 1.0, got {self.swing_factor!r}")
         if not isinstance(self.bpm, (int, float)) or (
             isinstance(self.bpm, float)
             and (math.isnan(self.bpm) or math.isinf(self.bpm))
