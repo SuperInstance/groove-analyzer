@@ -119,12 +119,8 @@ def fit_deadband(
         )
 
     n = len(all_devs)
-    sorted_devs = sorted(all_devs, key=abs)
-
-    # e that exactly covers the target quantile of absolute deviations
-    idx = int(math.ceil(coverage_target * n)) - 1
-    idx = max(0, min(n - 1, idx))
-    epsilon = abs(sorted_devs[idx])
+    idx = max(0, min(n - 1, int(math.ceil(coverage_target * n)) - 1))
+    epsilon = abs(sorted(all_devs, key=abs)[idx])
 
     delta = delta_mult * epsilon
 

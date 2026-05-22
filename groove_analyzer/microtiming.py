@@ -158,7 +158,26 @@ def _compute_swing(onsets: List[OnsetEvent], grid_division: int) -> float:
     return max(0.0, min(1.0, diff / 40.0))
 
 
-def _analyse_track(  # pylint: disable=too-many-locals
+def _gather_track_events(
+    mid: mido.MidiFile,
+) -> Dict[int, List[Tuple[int, int, int, int, str]]]:
+    """Collect note-on events per track from a MIDI file."""
+    track_events: Dict[int, List[Tuple[int, int, int, int, str]]] = {}
+    for track_idx, track in enumerate(mid.tracks):
+        name = f"track_{track_idx}"
+        tick = 0
+        for msg in track:
+            tick += msg.time
+            if msg.type == "track_name":
+                name = msg.name or name
+            elif msg.type == "note_on" and msg.velocity > 0:
+                track_events.setdefault(track_idx, []).append(
+                    (tick, msg.note, msg.velocity, msg.channel, name)
+                )
+    return track_events
+
+
+def _analyse_track(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     events: List[Tuple[int, int, int, int, str]],
     tempo_map: List[Tuple[int, int]],
     ticks_per_beat: int,
@@ -259,24 +278,12 @@ def extract_microtiming(
     default_tempo = tempo_map[0][1]
     bpm = 60_000_000.0 / default_tempo
 
-    # Gather note-on events per track
-    track_events: Dict[int, List[Tuple[int, int, int, int, str]]] = {}
-    for track_idx, track in enumerate(mid.tracks):
-        name = f"track_{track_idx}"
-        tick = 0
-        for msg in track:
-            tick += msg.time
-            if msg.type == "track_name":
-                name = msg.name or name
-            elif msg.type == "note_on" and msg.velocity > 0:
-                track_events.setdefault(track_idx, []).append(
-                    (tick, msg.note, msg.velocity, msg.channel, name)
-                )
+    track_events = _gather_track_events(mid)
 
     all_onsets: List[OnsetEvent] = []
     tracks: List[TrackTiming] = []
 
-    for _idx, events in track_events.items():
+    for events in track_events.values():
         if not events:
             continue
         tt = _analyse_track(events, tempo_map, tpb, grid_division, bpm, pocket_ms)
