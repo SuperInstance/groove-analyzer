@@ -2,7 +2,7 @@
 
 X axis: time (beats)
 Y axis: microtiming offset (ms)
-Shaded region: deadband ε(t)
+Shaded region: deadband e(t)
 Points: actual onsets (colour = instrument)
 """
 
@@ -53,8 +53,16 @@ def plot_deadband_funnel(
     for track in timing.tracks:
         beats = [o.beat for o in track.onsets]
         devs = [o.deviation_ms for o in track.onsets]
-        ax.scatter(beats, devs, label=track.track_name,
-                   color=colours[track.track_name], alpha=0.8, s=40, edgecolors="k", linewidths=0.3)
+        ax.scatter(
+            beats,
+            devs,
+            label=track.track_name,
+            color=colours[track.track_name],
+            alpha=0.8,
+            s=40,
+            edgecolors="k",
+            linewidths=0.3,
+        )
 
     # Plot deadband funnel envelope
     if timing.tracks:
@@ -67,12 +75,29 @@ def plot_deadband_funnel(
     epsilon_curve = funnel.deadband_ms * np.exp(-funnel.decay_rate * beat_grid)
     delta_curve = funnel.delta_ms * np.exp(-funnel.decay_rate * beat_grid)
 
-    ax.fill_between(beat_grid, -epsilon_curve, epsilon_curve,
-                    color="green", alpha=0.15, label=f"Deadband ε = {funnel.deadband_ms:.1f} ms")
-    ax.fill_between(beat_grid, epsilon_curve, delta_curve,
-                    color="orange", alpha=0.10)
-    ax.fill_between(beat_grid, -delta_curve, -epsilon_curve,
-                    color="orange", alpha=0.10, label=f"Approach zone δ = {funnel.delta_ms:.1f} ms")
+    ax.fill_between(
+        beat_grid,
+        -epsilon_curve,
+        epsilon_curve,
+        color="green",
+        alpha=0.15,
+        label=f"Deadband e = {funnel.deadband_ms:.1f} ms",
+    )
+    ax.fill_between(
+        beat_grid,
+        epsilon_curve,
+        delta_curve,
+        color="orange",
+        alpha=0.10,
+    )
+    ax.fill_between(
+        beat_grid,
+        -delta_curve,
+        -epsilon_curve,
+        color="orange",
+        alpha=0.10,
+        label=f"Approach zone d = {funnel.delta_ms:.1f} ms",
+    )
     ax.plot(beat_grid, epsilon_curve, "g--", linewidth=1.0)
     ax.plot(beat_grid, -epsilon_curve, "g--", linewidth=1.0)
     ax.plot(beat_grid, delta_curve, "r--", linewidth=1.0, alpha=0.5)
@@ -84,7 +109,7 @@ def plot_deadband_funnel(
     ax.set_title(title, fontsize=14, fontweight="bold")
     ax.legend(loc="upper right", fontsize=8)
     ax.set_xlim(0, max_beat)
-    # Y limit: at least ± max delta, or ± 60 ms
+    # Y limit: at least +/- max delta, or +/- 60 ms
     ylim = max(funnel.delta_ms * 1.2, 60.0)
     ax.set_ylim(-ylim, ylim)
     ax.grid(True, alpha=0.3)
@@ -92,14 +117,20 @@ def plot_deadband_funnel(
     # Annotation
     fit = fit_deadband(timing)
     text = (
-        f"ε = {fit.epsilon_ms:.1f} ms\n"
-        f"δ = {fit.delta_ms:.1f} ms\n"
-        f"Coverage = {fit.coverage*100:.0f}%\n"
+        f"e = {fit.epsilon_ms:.1f} ms\n"
+        f"d = {fit.delta_ms:.1f} ms\n"
+        f"Coverage = {fit.coverage * 100:.0f}%\n"
         f"Genre match: {fit.genre_match or 'unknown'}"
     )
-    ax.text(0.02, 0.98, text, transform=ax.transAxes,
-            fontsize=10, verticalalignment="top",
-            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
+    ax.text(
+        0.02,
+        0.98,
+        text,
+        transform=ax.transAxes,
+        fontsize=10,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+    )
 
     fig.tight_layout()
 
@@ -115,6 +146,9 @@ def plot_groove_comparison(
     figsize: tuple[int, int] = (14, 8),
 ) -> plt.Figure:
     """Plot a grid of deadband funnel plots for multiple files / genres."""
+    if not timings:
+        raise ValueError("timings must not be empty")
+
     n = len(timings)
     cols = min(3, n)
     rows = (n + cols - 1) // cols
@@ -130,14 +164,25 @@ def plot_groove_comparison(
         for track in timing.tracks:
             beats = [o.beat for o in track.onsets]
             devs = [o.deviation_ms for o in track.onsets]
-            ax.scatter(beats, devs, label=track.track_name,
-                       color=colours[track.track_name], alpha=0.7, s=30)
+            ax.scatter(
+                beats,
+                devs,
+                label=track.track_name,
+                color=colours[track.track_name],
+                alpha=0.7,
+                s=30,
+            )
 
-        max_beat = max((o.beat for t in timing.tracks for o in t.onsets), default=16.0)
+        max_beat = max(
+            (o.beat for t in timing.tracks for o in t.onsets),
+            default=16.0,
+        )
         beat_grid = np.linspace(0, max_beat, 300)
         eps_curve = funnel.deadband_ms * np.exp(-funnel.decay_rate * beat_grid)
         del_curve = funnel.delta_ms * np.exp(-funnel.decay_rate * beat_grid)
-        ax.fill_between(beat_grid, -eps_curve, eps_curve, color="green", alpha=0.15)
+        ax.fill_between(
+            beat_grid, -eps_curve, eps_curve, color="green", alpha=0.15
+        )
         ax.plot(beat_grid, eps_curve, "g--", linewidth=0.8)
         ax.plot(beat_grid, -eps_curve, "g--", linewidth=0.8)
         ax.plot(beat_grid, del_curve, "r--", linewidth=0.8, alpha=0.4)
@@ -153,16 +198,26 @@ def plot_groove_comparison(
         ax.grid(True, alpha=0.3)
 
         fit = fit_deadband(timing)
-        ax.text(0.98, 0.98, f"ε={fit.epsilon_ms:.1f}ms\n{fit.genre_match}",
-                transform=ax.transAxes, fontsize=9, verticalalignment="top",
-                horizontalalignment="right",
-                bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
+        ax.text(
+            0.98,
+            0.98,
+            f"e={fit.epsilon_ms:.1f}ms\n{fit.genre_match}",
+            transform=ax.transAxes,
+            fontsize=9,
+            verticalalignment="top",
+            horizontalalignment="right",
+            bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5),
+        )
 
     # Hide unused subplots
     for idx in range(n, rows * cols):
         axes[idx // cols][idx % cols].axis("off")
 
-    fig.suptitle("Groove = Deadband Funnel — Genre Comparison", fontsize=14, fontweight="bold")
+    fig.suptitle(
+        "Groove = Deadband Funnel - Genre Comparison",
+        fontsize=14,
+        fontweight="bold",
+    )
     fig.tight_layout(rect=[0, 0, 1, 0.96])
 
     if save_path is not None:

@@ -1,6 +1,6 @@
 """Genre-specific deadband profiles and synthetic groove generation.
 
-Each genre is characterised by a deadband ε, a swing factor, and a
+Each genre is characterised by a deadband e, a swing factor, and a
 statistical distribution of microtiming offsets.  We synthesise grooves
 by placing notes on a metronome grid and then perturbing each onset by
 a random offset drawn from the genre's deadband distribution.
@@ -17,7 +17,7 @@ import mido
 
 
 @dataclass
-class GenreProfile:
+class GenreProfile:  # pylint: disable=too-many-instance-attributes
     """Deadband parameters for a musical genre."""
     name: str
     epsilon_ms: float       # deadband half-width in ms
@@ -30,6 +30,12 @@ class GenreProfile:
     # Microtiming distribution: "uniform", "triangular", "gaussian"
     distribution: str
     ahead_bias: float       # mean offset in ms (negative = ahead, positive = behind)
+
+    def __repr__(self) -> str:
+        return (
+            f"GenreProfile(name={self.name!r}, e={self.epsilon_ms:.1f}ms, "
+            f"bpm={self.bpm:.1f})"
+        )
 
 
 GENRE_PROFILES: Dict[str, GenreProfile] = {
@@ -100,14 +106,18 @@ def _random_offset(profile: GenreProfile) -> float:
     """Draw a microtiming offset in ms from the genre's distribution."""
     low, high = profile.epsilon_range
     if profile.distribution == "uniform":
-        return random.uniform(low, high) * random.choice((-1, 1)) + profile.ahead_bias
-    elif profile.distribution == "triangular":
+        return (
+            random.uniform(low, high)
+            * random.choice((-1, 1))
+            + profile.ahead_bias
+        )
+    if profile.distribution == "triangular":
         # Triangular centred on bias, width = epsilon_range
         mode = profile.ahead_bias
         return random.triangular(low - abs(mode), high + abs(mode), mode)
-    else:  # gaussian
-        sigma = (high - low) / 4.0
-        return random.gauss(profile.ahead_bias, sigma)
+    # gaussian
+    sigma = (high - low) / 4.0
+    return random.gauss(profile.ahead_bias, sigma)
 
 
 def _swing_beat(beat: float, swing: float, bpm: float) -> float:
@@ -117,12 +127,119 @@ def _swing_beat(beat: float, swing: float, bpm: float) -> float:
     by swing amount.  Delay is measured in beats: at full swing (1.0)
     the delayed 8th lands on the triplet (1/3 of a quarter note later).
     """
+    del bpm  # reserved for future tempo-dependent swing
     idx = round(beat * 4)  # 16th note index
     if idx % 2 == 0:
         return beat
     # Delay the off-beat 8th
     delay_beats = swing * (1.0 / 3.0) * 0.5  # fraction of a quarter note
     return beat + delay_beats
+
+
+def _default_parts(genre: str) -> Dict[str, List[int]]:
+    """Return default drum pattern for a genre."""
+    if genre == "Jazz":
+        return {
+            "Ride": [0, 2, 4, 6, 8, 10, 12, 14],
+            "HiHat": [1, 3, 5, 7, 9, 11, 13, 15],
+            "Snare": [4, 12],
+            "Kick": [0, 6, 10],
+            "Bass": [0, 3, 6, 10, 12],
+        }
+    if genre == "Latin":
+        return {
+            "Conga": [0, 3, 6, 10, 12],
+            "Clave": [0, 3, 6, 10, 12],
+            "Timbales": [2, 6, 10, 14],
+            "Bass": [0, 7, 10, 14],
+        }
+    return {
+        "Kick": [0, 4, 8, 12],
+        "Snare": [4, 12],
+        "HiHat": [0, 2, 4, 6, 8, 10, 12, 14],
+        "Bass": [0, 3, 6, 10, 12],
+    }
+
+
+def _build_meta_track(profile: GenreProfile) -> mido.MidiTrack:
+    """Create a MIDI meta track with tempo and time signature."""
+    tempo = int(60_000_000.0 / profile.bpm)
+    meta_track = mido.MidiTrack()
+    meta_track.append(mido.MetaMessage("track_name", name="Meta", time=0))
+    meta_track.append(mido.MetaMessage("set_tempo", tempo=tempo, time=0))
+    meta_track.append(
+        mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0)
+    )
+    meta_track.append(mido.MetaMessage("end_of_track", time=0))
+    return meta_track
+
+
+def _build_instrument_track(  # pylint: disable=too-many-locals
+    inst_name: str,
+    hits: List[int],
+    bars: int,
+    profile: GenreProfile,
+    tpb: int,
+) -> mido.MidiTrack:
+    """Create a single instrument track with microtiming offsets."""
+    # Pitch mapping for named parts
+    default_pitches = {
+        "Kick": 36,
+        "Snare": 38,
+        "HiHat": 42,
+        "Ride": 51,
+        "Bass": 40,
+        "Conga": 60,
+        "Clave": 75,
+        "Timbales": 65,
+    }
+
+    track = mido.MidiTrack()
+    track.append(mido.MetaMessage("track_name", name=inst_name, time=0))
+    pitch = default_pitches.get(inst_name, 60)
+    grid_division = 4  # 16ths per beat
+
+    prev_tick = 0
+    for bar_idx in range(bars):
+        for idx in hits:
+            beat_in_bar = idx / grid_division
+            beat_global = bar_idx * 4 + beat_in_bar
+            beat_swing = _swing_beat(
+                beat_global, profile.swing_factor, profile.bpm
+            )
+
+            # Add microtiming offset
+            offset_ms = _random_offset(profile)
+            offset_beats = offset_ms / (60_000.0 / profile.bpm)
+            beat_final = beat_swing + offset_beats
+
+            tick = int(round(beat_final * tpb))
+            delta = max(tick - prev_tick, 0)
+            vel = int(random.gauss(profile.velocity_mean, profile.velocity_std))
+            vel = max(1, min(127, vel))
+
+            channel = (
+                9
+                if inst_name in default_pitches and inst_name != "Bass"
+                else 0
+            )
+            track.append(
+                mido.Message(
+                    "note_on",
+                    note=pitch,
+                    velocity=vel,
+                    time=delta,
+                    channel=channel,
+                )
+            )
+            # Note-off 100 ticks later
+            track.append(
+                mido.Message("note_off", note=pitch, velocity=0, time=100)
+            )
+            prev_tick = tick + 100
+
+    track.append(mido.MetaMessage("end_of_track", time=0))
+    return track
 
 
 def synthesize_groove(
@@ -152,6 +269,9 @@ def synthesize_groove(
     -------
     mido.MidiFile
     """
+    if bars <= 0:
+        raise ValueError("bars must be positive")
+
     if seed is not None:
         random.seed(seed)
 
@@ -159,83 +279,21 @@ def synthesize_groove(
     if profile is None:
         raise ValueError(f"Unknown genre: {genre}")
 
+    if profile.bpm <= 0:
+        raise ValueError(f"Invalid BPM in genre profile: {profile.bpm}")
+
     if parts is None:
-        # Standard drum-kit pattern (16th-note indices per bar)
-        if genre == "Jazz":
-            parts = {
-                "Ride": [0, 2, 4, 6, 8, 10, 12, 14],
-                "HiHat": [1, 3, 5, 7, 9, 11, 13, 15],
-                "Snare": [4, 12],
-                "Kick": [0, 6, 10],
-                "Bass": [0, 3, 6, 10, 12],
-            }
-        elif genre == "Latin":
-            parts = {
-                "Conga": [0, 3, 6, 10, 12],
-                "Clave": [0, 3, 6, 10, 12],
-                "Timbales": [2, 6, 10, 14],
-                "Bass": [0, 7, 10, 14],
-            }
-        else:
-            parts = {
-                "Kick": [0, 4, 8, 12],
-                "Snare": [4, 12],
-                "HiHat": [0, 2, 4, 6, 8, 10, 12, 14],
-                "Bass": [0, 3, 6, 10, 12],
-            }
+        parts = _default_parts(genre)
 
     mid = mido.MidiFile(ticks_per_beat=480)
     tpb = mid.ticks_per_beat
-    tempo = int(60_000_000.0 / profile.bpm)
-    grid_division = 4  # 16ths per beat
-    tick_per_16th = tpb // grid_division
 
-    # Track 0: tempo + time sig
-    meta_track = mido.MidiTrack()
-    meta_track.append(mido.MetaMessage("track_name", name="Meta", time=0))
-    meta_track.append(mido.MetaMessage("set_tempo", tempo=tempo, time=0))
-    meta_track.append(mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0))
-    meta_track.append(mido.MetaMessage("end_of_track", time=0))
-    mid.tracks.append(meta_track)
-
-    # Pitch mapping for named parts
-    default_pitches = {
-        "Kick": 36, "Snare": 38, "HiHat": 42, "Ride": 51,
-        "Bass": 40, "Conga": 60, "Clave": 75, "Timbales": 65,
-    }
+    mid.tracks.append(_build_meta_track(profile))
 
     for inst_name, hits in parts.items():
-        track = mido.MidiTrack()
-        track.append(mido.MetaMessage("track_name", name=inst_name, time=0))
-        pitch = default_pitches.get(inst_name, 60)
-
-        prev_tick = 0
-        for bar in range(bars):
-            for idx in hits:
-                beat_in_bar = idx / grid_division
-                beat_global = bar * 4 + beat_in_bar
-                beat_swing = _swing_beat(beat_global, profile.swing_factor, profile.bpm)
-
-                # Add microtiming offset
-                offset_ms = _random_offset(profile)
-                offset_beats = offset_ms / (60_000.0 / profile.bpm)
-                beat_final = beat_swing + offset_beats
-
-                tick = int(round(beat_final * tpb))
-                delta = tick - prev_tick
-                if delta < 0:
-                    delta = 0
-                vel = int(random.gauss(profile.velocity_mean, profile.velocity_std))
-                vel = max(1, min(127, vel))
-
-                track.append(mido.Message("note_on", note=pitch, velocity=vel, time=delta, channel=9 if inst_name in default_pitches and inst_name != "Bass" else 0))
-                # Note-off 100 ticks later (on same track, correct delta handling would be more complex)
-                # For simplicity, we insert note_off with delta 0 right after
-                track.append(mido.Message("note_off", note=pitch, velocity=0, time=100))
-                prev_tick = tick + 100
-
-        track.append(mido.MetaMessage("end_of_track", time=0))
-        mid.tracks.append(track)
+        mid.tracks.append(
+            _build_instrument_track(inst_name, hits, bars, profile, tpb)
+        )
 
     if output_path is not None:
         mid.save(str(output_path))
@@ -243,7 +301,11 @@ def synthesize_groove(
     return mid
 
 
-def generate_all_genre_examples(output_dir: Path | str, bars: int = 4, seed: int = 42) -> List[Path]:
+def generate_all_genre_examples(
+    output_dir: Path | str,
+    bars: int = 4,
+    seed: int = 42,
+) -> List[Path]:
     """Generate one example MIDI file per genre."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)

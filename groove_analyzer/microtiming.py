@@ -26,7 +26,7 @@ class TimingClass(str, Enum):
 
 
 @dataclass
-class OnsetEvent:
+class OnsetEvent:  # pylint: disable=too-many-instance-attributes
     """A single note onset with its timing data."""
     time_sec: float       # absolute time in seconds
     beat: float           # absolute position in beats
@@ -38,9 +38,15 @@ class OnsetEvent:
     deviation_ms: float   # deviation from grid in ms (+ = behind, - = ahead)
     timing_class: TimingClass = TimingClass.POCKET
 
+    def __repr__(self) -> str:
+        return (
+            f"OnsetEvent(beat={self.beat:.3f}, dev={self.deviation_ms:.2f}ms, "
+            f"pitch={self.pitch}, track={self.track_name!r})"
+        )
+
 
 @dataclass
-class TrackTiming:
+class TrackTiming:  # pylint: disable=too-many-instance-attributes
     """Timing summary for one track / instrument."""
     track_name: str
     onsets: List[OnsetEvent] = field(default_factory=list)
@@ -52,9 +58,15 @@ class TrackTiming:
     behind_pct: float = 0.0
     pocket_pct: float = 0.0
 
+    def __repr__(self) -> str:
+        return (
+            f"TrackTiming(name={self.track_name!r}, onsets={len(self.onsets)}, "
+            f"avg={self.avg_offset_ms:.2f}ms, std={self.std_offset_ms:.2f}ms)"
+        )
+
 
 @dataclass
-class GrooveTiming:
+class GrooveTiming:  # pylint: disable=too-many-instance-attributes
     """Complete timing analysis for a MIDI file."""
     bpm: float
     ticks_per_beat: int
@@ -64,6 +76,12 @@ class GrooveTiming:
     global_std_offset_ms: float = 0.0
     global_pocket_width_ms: float = 0.0
     global_swing_factor: float = 0.0
+
+    def __repr__(self) -> str:
+        return (
+            f"GrooveTiming(bpm={self.bpm:.1f}, tracks={len(self.tracks)}, "
+            f"grid={self.grid_division})"
+        )
 
 
 def _build_tempo_map(mid: mido.MidiFile) -> List[Tuple[int, int]]:
@@ -79,7 +97,11 @@ def _build_tempo_map(mid: mido.MidiFile) -> List[Tuple[int, int]]:
     return tempos
 
 
-def _tick_to_seconds(tick: int, tempo_map: List[Tuple[int, int]], ticks_per_beat: int) -> float:
+def _tick_to_seconds(
+    tick: int,
+    tempo_map: List[Tuple[int, int]],
+    ticks_per_beat: int,
+) -> float:
     """Convert absolute tick count to seconds using the tempo map."""
     sec = 0.0
     prev_tick = 0
@@ -136,6 +158,77 @@ def _compute_swing(onsets: List[OnsetEvent], grid_division: int) -> float:
     return max(0.0, min(1.0, diff / 40.0))
 
 
+def _analyse_track(  # pylint: disable=too-many-locals
+    events: List[Tuple[int, int, int, int, str]],
+    tempo_map: List[Tuple[int, int]],
+    ticks_per_beat: int,
+    grid_division: int,
+    bpm: float,
+    pocket_ms: Optional[float],
+) -> TrackTiming:
+    """Build a TrackTiming from raw note-on events."""
+    name = events[0][4]
+    onsets: List[OnsetEvent] = []
+    for tick, pitch, velocity, channel, _ in events:
+        sec = _tick_to_seconds(tick, tempo_map, ticks_per_beat)
+        beat = tick / ticks_per_beat
+        grid = _snap_to_grid(beat, grid_division)
+        deviation = (beat - grid) * (60_000.0 / bpm)
+        onsets.append(OnsetEvent(
+            time_sec=sec,
+            beat=beat,
+            pitch=pitch,
+            velocity=velocity,
+            channel=channel,
+            track_name=name,
+            grid_line=grid,
+            deviation_ms=deviation,
+        ))
+
+    # Sort by time
+    onsets.sort(key=lambda o: o.time_sec)
+
+    # Global pocket threshold if not provided
+    if pocket_ms is None:
+        deviations = [o.deviation_ms for o in onsets]
+        med = float(sorted(deviations)[len(deviations) // 2])
+        mad = float(
+            sorted(abs(d - med) for d in deviations)[len(deviations) // 2]
+        )
+        threshold = 1.5 * mad if mad > 0 else 10.0
+    else:
+        threshold = pocket_ms
+
+    # Classify each onset
+    for o in onsets:
+        o.timing_class = _classify_deviation(o.deviation_ms, threshold)
+
+    deviations = [o.deviation_ms for o in onsets]
+    avg = sum(deviations) / len(deviations) if deviations else 0.0
+    std = (
+        math.sqrt(sum((d - avg) ** 2 for d in deviations) / len(deviations))
+        if deviations else 0.0
+    )
+    swing = _compute_swing(onsets, grid_division)
+
+    n_total = len(onsets)
+    n_ahead = sum(1 for o in onsets if o.timing_class == TimingClass.AHEAD)
+    n_behind = sum(1 for o in onsets if o.timing_class == TimingClass.BEHIND)
+    n_pocket = sum(1 for o in onsets if o.timing_class == TimingClass.POCKET)
+
+    return TrackTiming(
+        track_name=name,
+        onsets=onsets,
+        avg_offset_ms=avg,
+        std_offset_ms=std,
+        swing_factor=swing,
+        pocket_width_ms=threshold,
+        ahead_pct=100.0 * n_ahead / n_total if n_total else 0.0,
+        behind_pct=100.0 * n_behind / n_total if n_total else 0.0,
+        pocket_pct=100.0 * n_pocket / n_total if n_total else 0.0,
+    )
+
+
 def extract_microtiming(
     path: Path | str,
     grid_division: int = 16,
@@ -151,12 +244,15 @@ def extract_microtiming(
         Grid resolution in parts per beat (4 = quarter, 8 = 8th, 16 = 16th).
     pocket_ms : float, optional
         Threshold in ms for the "pocket" classification.  If None, computed
-        from the data as 1.5 × median absolute deviation.
+        from the data as 1.5 x median absolute deviation.
 
     Returns
     -------
     GrooveTiming
     """
+    if grid_division <= 0:
+        raise ValueError("grid_division must be positive")
+
     mid = mido.MidiFile(str(path))
     tpb = mid.ticks_per_beat
     tempo_map = _build_tempo_map(mid)
@@ -180,74 +276,24 @@ def extract_microtiming(
     all_onsets: List[OnsetEvent] = []
     tracks: List[TrackTiming] = []
 
-    for track_idx, events in track_events.items():
+    for _idx, events in track_events.items():
         if not events:
             continue
-        name = events[0][4]
-        onsets: List[OnsetEvent] = []
-        for tick, pitch, velocity, channel, _ in events:
-            sec = _tick_to_seconds(tick, tempo_map, tpb)
-            beat = tick / tpb
-            grid = _snap_to_grid(beat, grid_division)
-            deviation = (beat - grid) * (60_000.0 / bpm)
-            onsets.append(OnsetEvent(
-                time_sec=sec,
-                beat=beat,
-                pitch=pitch,
-                velocity=velocity,
-                channel=channel,
-                track_name=name,
-                grid_line=grid,
-                deviation_ms=deviation,
-            ))
-
-        # Sort by time
-        onsets.sort(key=lambda o: o.time_sec)
-
-        # Global pocket threshold if not provided
-        if pocket_ms is None:
-            deviations = [o.deviation_ms for o in onsets]
-            med = float(sorted(deviations)[len(deviations) // 2])
-            mad = float(sorted(abs(d - med) for d in deviations)[len(deviations) // 2])
-            threshold = 1.5 * mad if mad > 0 else 10.0
-        else:
-            threshold = pocket_ms
-
-        # Classify each onset
-        for o in onsets:
-            o.timing_class = _classify_deviation(o.deviation_ms, threshold)
-
-        deviations = [o.deviation_ms for o in onsets]
-        avg = sum(deviations) / len(deviations) if deviations else 0.0
-        std = math.sqrt(sum((d - avg) ** 2 for d in deviations) / len(deviations)) if deviations else 0.0
-        swing = _compute_swing(onsets, grid_division)
-
-        n_total = len(onsets)
-        n_ahead = sum(1 for o in onsets if o.timing_class == TimingClass.AHEAD)
-        n_behind = sum(1 for o in onsets if o.timing_class == TimingClass.BEHIND)
-        n_pocket = sum(1 for o in onsets if o.timing_class == TimingClass.POCKET)
-
-        tt = TrackTiming(
-            track_name=name,
-            onsets=onsets,
-            avg_offset_ms=avg,
-            std_offset_ms=std,
-            swing_factor=swing,
-            pocket_width_ms=threshold,
-            ahead_pct=100.0 * n_ahead / n_total if n_total else 0.0,
-            behind_pct=100.0 * n_behind / n_total if n_total else 0.0,
-            pocket_pct=100.0 * n_pocket / n_total if n_total else 0.0,
-        )
+        tt = _analyse_track(events, tempo_map, tpb, grid_division, bpm, pocket_ms)
         tracks.append(tt)
-        all_onsets.extend(onsets)
+        all_onsets.extend(tt.onsets)
 
     # Global stats
     if all_onsets:
         g_devs = [o.deviation_ms for o in all_onsets]
         g_avg = sum(g_devs) / len(g_devs)
-        g_std = math.sqrt(sum((d - g_avg) ** 2 for d in g_devs) / len(g_devs))
+        g_std = math.sqrt(
+            sum((d - g_avg) ** 2 for d in g_devs) / len(g_devs)
+        )
         g_med = float(sorted(g_devs)[len(g_devs) // 2])
-        g_mad = float(sorted(abs(d - g_med) for d in g_devs)[len(g_devs) // 2])
+        g_mad = float(
+            sorted(abs(d - g_med) for d in g_devs)[len(g_devs) // 2]
+        )
         g_pocket = 1.5 * g_mad if g_mad > 0 else 10.0
         g_swing = _compute_swing(all_onsets, grid_division)
     else:
