@@ -176,6 +176,13 @@ fig = plot_groove_comparison(timings_dict, save_path="comparison.png")
 
 Data flow: `MIDI file → extract_microtiming → fit_deadband → build_funnel → plot`
 
+## Documentation
+
+- [User Guide](docs/USER-GUIDE.md) — Complete usage documentation
+- [Developer Guide](docs/DEVELOPER-GUIDE.md) — Contributing and internals
+- [Examples](examples/) — Working code examples
+- [Report](docs/report/GROOVE_REPORT.md) — Genre groove analysis report
+
 ## Ecosystem
 
 - **[constraint-theory-core](https://github.com/SuperInstance/constraint-theory-core)** — Deadband theory, constraint checking
@@ -192,11 +199,16 @@ Data flow: `MIDI file → extract_microtiming → fit_deadband → build_funnel 
 ## Installation
 
 ```bash
+pip install groove-analyzer
+```
+
+Or install from source:
+
+```bash
 git clone https://github.com/SuperInstance/groove-analyzer.git
 cd groove-analyzer
 pip install -e ".[dev]"
-pytest                     # 11/11 pass ✅
-python analyze_grooves.py  # generate full report
+pytest  # 11/11 pass ✅
 ```
 
 ## Status
