@@ -1,7 +1,11 @@
 """Groove Analyzer — prove groove = deadband funnel."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
+from .exceptions import (
+    GrooveAnalysisError,
+    InvalidGrooveError,
+)
 from .microtiming import (
     extract_microtiming,
     GrooveTiming,
@@ -29,6 +33,9 @@ from .visualize import (
 )
 
 __all__ = [
+    # Exceptions
+    "GrooveAnalysisError",
+    "InvalidGrooveError",
     # Microtiming
     "extract_microtiming",
     "GrooveTiming",

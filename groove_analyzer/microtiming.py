@@ -18,6 +18,8 @@ from typing import Dict, List, Optional, Tuple
 
 import mido
 
+from .exceptions import GrooveAnalysisError, InvalidGrooveError
+
 
 class TimingClass(str, Enum):
     AHEAD = "ahead"      # early, pushing the beat
@@ -95,7 +97,19 @@ class GrooveTiming:  # pylint: disable=too-many-instance-attributes
 
 
 def _build_tempo_map(mid: mido.MidiFile) -> List[Tuple[int, int]]:
-    """Return list of (absolute_tick, tempo_microseconds) from track 0."""
+    """Return list of (absolute_tick, tempo_microseconds) from track 0.
+
+    Parameters
+    ----------
+    mid : mido.MidiFile
+        Parsed MIDI file object.
+
+    Returns
+    -------
+    list[tuple[int, int]]
+        Sorted list of (tick, tempo_in_microseconds) pairs.  Falls back to
+        ``[(0, 500_000)]`` (120 BPM) when no *set_tempo* messages exist.
+    """
     tempos: List[Tuple[int, int]] = []
     tick = 0
     for msg in mid.tracks[0]:
@@ -112,7 +126,22 @@ def _tick_to_seconds(
     tempo_map: List[Tuple[int, int]],
     ticks_per_beat: int,
 ) -> float:
-    """Convert absolute tick count to seconds using the tempo map."""
+    """Convert absolute tick count to seconds using the tempo map.
+
+    Parameters
+    ----------
+    tick : int
+        Absolute tick position.
+    tempo_map : list[tuple[int, int]]
+        Output of :func:`_build_tempo_map`.
+    ticks_per_beat : int
+        MIDI ticks-per-quarter-note resolution.
+
+    Returns
+    -------
+    float
+        Time in seconds.
+    """
     sec = 0.0
     prev_tick = 0
     prev_tempo = tempo_map[0][1]
@@ -127,11 +156,37 @@ def _tick_to_seconds(
 
 
 def _snap_to_grid(beat: float, division: int) -> float:
-    """Return nearest grid line in beats for a given division."""
+    """Return nearest grid line in beats for a given division.
+
+    Parameters
+    ----------
+    beat : float
+        Beat position (e.g. 1.37).
+    division : int
+        Grid resolution in parts per beat (4 = 16th notes).
+
+    Returns
+    -------
+    float
+        Nearest grid-aligned beat position.
+    """
     return round(beat * division) / division
 
 
 def _classify_deviation(deviation_ms: float, pocket_ms: float) -> TimingClass:
+    """Classify a timing deviation as ahead, behind, or in the pocket.
+
+    Parameters
+    ----------
+    deviation_ms : float
+        Deviation in milliseconds.  Positive = behind, negative = ahead.
+    pocket_ms : float
+        Pocket half-width in milliseconds.
+
+    Returns
+    -------
+    TimingClass
+    """
     if abs(deviation_ms) <= pocket_ms:
         return TimingClass.POCKET
     return TimingClass.BEHIND if deviation_ms > 0 else TimingClass.AHEAD
@@ -352,18 +407,39 @@ def extract_microtiming(
     GrooveTiming
     """
     if grid_division <= 0:
-        raise ValueError("grid_division must be positive")
+        raise InvalidGrooveError(
+            f"grid_division must be positive, got {grid_division}",
+        )
 
-    mid = mido.MidiFile(str(path))
+    p = Path(path)
+    if not p.exists():
+        raise GrooveAnalysisError(
+            f"MIDI file not found: {p}", path=str(p),
+        )
+
+    try:
+        mid = mido.MidiFile(str(path))
+    except Exception as exc:
+        raise GrooveAnalysisError(
+            f"Failed to parse MIDI file '{path}': {exc}",
+            path=str(path),
+        ) from exc
 
     if not mid.tracks:
-        raise ValueError(
-            f"MIDI file '{path}' contains no tracks — nothing to analyse."
+        raise InvalidGrooveError(
+            f"MIDI file '{path}' contains no tracks — nothing to analyse.",
+            path=str(path),
         )
 
     tpb = mid.ticks_per_beat
     tempo_map = _build_tempo_map(mid)
     bpm = 60_000_000.0 / tempo_map[0][1]
+
+    if bpm <= 0 or math.isnan(bpm) or math.isinf(bpm):
+        raise InvalidGrooveError(
+            f"Invalid BPM derived from MIDI file: {bpm}",
+            path=str(path),
+        )
 
     track_events = _gather_track_events(mid)
 

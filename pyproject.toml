@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "groove-analyzer"
-version = "0.1.0"
+version = "0.2.0"
 description = "Prove groove = deadband funnel via MIDI microtiming analysis"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Groove Analyzer Team"},
@@ -18,10 +18,10 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Sound/Audio :: MIDI",
 ]
 dependencies = [
@@ -36,6 +36,7 @@ dev = [
     "pylint>=3.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
+    "hypothesis>=6.0",
 ]
 
 [project.urls]

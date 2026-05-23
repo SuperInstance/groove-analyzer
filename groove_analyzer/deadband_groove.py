@@ -69,7 +69,24 @@ def _compute_confidence(
     inside_devs: List[float],
     all_devs: List[float],
 ) -> float:
-    """Compute confidence score from deviation lists."""
+    """Compute confidence score from deviation lists.
+
+    Confidence measures how much the variance drops when we restrict
+    to deviations inside the deadband.  A value close to 1.0 means
+    the deadband tightly contains the groove.
+
+    Parameters
+    ----------
+    inside_devs : list[float]
+        Deviations that fall inside the deadband.
+    all_devs : list[float]
+        All deviations.
+
+    Returns
+    -------
+    float
+        Confidence in [0, 1].
+    """
     if inside_devs:
         mu = sum(inside_devs) / len(inside_devs)
         var_in = sum((d - mu) ** 2 for d in inside_devs) / len(inside_devs)
@@ -107,6 +124,11 @@ def fit_deadband(
     -------
     DeadbandFit
     """
+    if not isinstance(coverage_target, (int, float)) or not (0.0 < coverage_target <= 1.0):
+        raise ValueError(f"coverage_target must be in (0, 1], got {coverage_target}")
+    if not isinstance(delta_mult, (int, float)) or delta_mult <= 1.0:
+        raise ValueError(f"delta_mult must be > 1.0, got {delta_mult}")
+
     all_devs = [o.deviation_ms for t in timing.tracks for o in t.onsets]
     if not all_devs:
         return DeadbandFit(
@@ -229,7 +251,23 @@ def _compute_variance_collapse(
     all_devs: List[float],
     epsilon_ms: float,
 ) -> float:
-    """Compute variance collapse metric."""
+    """Compute variance collapse metric.
+
+    Measures the reduction in standard deviation when restricting to
+    onsets inside the deadband, relative to all onsets.
+
+    Parameters
+    ----------
+    all_devs : list[float]
+        All microtiming deviations in ms.
+    epsilon_ms : float
+        Deadband half-width in ms.
+
+    Returns
+    -------
+    float
+        Collapse ratio in [0, 1].
+    """
     n = len(all_devs)
     mu = sum(all_devs) / n
     raw_var = sum((d - mu) ** 2 for d in all_devs) / n
@@ -246,10 +284,23 @@ def prove_groove_is_deadband(timing: GrooveTiming) -> Dict[str, float]:
     """Return a dictionary of quantitative evidence that groove = deadband.
 
     The proof has three pillars:
-    1. Coverage: most onsets fall inside the fitted e.
-    2. Variance collapse: the standard deviation inside e is much smaller
-       than the raw deviation, showing the deadband *contains* the groove.
-    3. Genre discrimination: different genres map to different e ranges.
+
+    1. **Coverage:** most onsets fall inside the fitted ε.
+    2. **Variance collapse:** the standard deviation inside ε is much
+       smaller than the raw deviation, showing the deadband *contains*
+       the groove.
+    3. **Genre coherence:** different genres map to different ε ranges.
+
+    Parameters
+    ----------
+    timing : GrooveTiming
+        Output from :func:`extract_microtiming`.
+
+    Returns
+    -------
+    dict[str, float]
+        Keys: ``coverage``, ``variance_collapse``, ``genre_coherence``,
+        ``epsilon_ms``, ``delta_ms``, ``genre_match``.
     """
     fit = fit_deadband(timing)
     all_devs = [o.deviation_ms for t in timing.tracks for o in t.onsets]
