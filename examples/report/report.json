@@ -1,0 +1,348 @@
+{
+  "Jazz": {
+    "file": "jazz_groove.mid",
+    "bpm": 120.0,
+    "total_onsets": 208,
+    "tracks": [
+      {
+        "name": "Ride",
+        "onsets": 64,
+        "avg_offset_ms": -2.73,
+        "std_offset_ms": 22.99,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 26.56,
+        "ahead_pct": 18.8,
+        "behind_pct": 12.5,
+        "pocket_pct": 68.8
+      },
+      {
+        "name": "HiHat",
+        "onsets": 64,
+        "avg_offset_ms": -3.69,
+        "std_offset_ms": 23.67,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 29.69,
+        "ahead_pct": 15.6,
+        "behind_pct": 9.4,
+        "pocket_pct": 75.0
+      },
+      {
+        "name": "Snare",
+        "onsets": 16,
+        "avg_offset_ms": -3.26,
+        "std_offset_ms": 25.64,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 34.38,
+        "ahead_pct": 12.5,
+        "behind_pct": 6.2,
+        "pocket_pct": 81.2
+      },
+      {
+        "name": "Kick",
+        "onsets": 24,
+        "avg_offset_ms": 8.29,
+        "std_offset_ms": 21.7,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 23.44,
+        "ahead_pct": 8.3,
+        "behind_pct": 37.5,
+        "pocket_pct": 54.2
+      },
+      {
+        "name": "Bass",
+        "onsets": 40,
+        "avg_offset_ms": 0.1,
+        "std_offset_ms": 19.49,
+        "swing_factor": 0.02,
+        "pocket_width_ms": 18.75,
+        "ahead_pct": 12.5,
+        "behind_pct": 15.0,
+        "pocket_pct": 72.5
+      }
+    ],
+    "deadband_fit": {
+      "epsilon_ms": 39.58,
+      "delta_ms": 98.96,
+      "coverage": 0.957,
+      "anomaly_rate": 0.0,
+      "genre_match": "Jazz",
+      "confidence": 0.045
+    },
+    "proof": {
+      "coverage": 0.957,
+      "variance_collapse": 0.045,
+      "genre_coherence": 0.972,
+      "epsilon_ms": 39.583,
+      "delta_ms": 98.958,
+      "genre_match": "Jazz"
+    }
+  },
+  "Funk": {
+    "file": "funk_groove.mid",
+    "bpm": 105.000105000105,
+    "total_onsets": 152,
+    "tracks": [
+      {
+        "name": "Kick",
+        "onsets": 32,
+        "avg_offset_ms": 1.6,
+        "std_offset_ms": 7.17,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 5.36,
+        "ahead_pct": 15.6,
+        "behind_pct": 37.5,
+        "pocket_pct": 46.9
+      },
+      {
+        "name": "Snare",
+        "onsets": 16,
+        "avg_offset_ms": 2.83,
+        "std_offset_ms": 7.09,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 8.93,
+        "ahead_pct": 6.2,
+        "behind_pct": 31.2,
+        "pocket_pct": 62.5
+      },
+      {
+        "name": "HiHat",
+        "onsets": 64,
+        "avg_offset_ms": 2.79,
+        "std_offset_ms": 10.46,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 10.71,
+        "ahead_pct": 12.5,
+        "behind_pct": 25.0,
+        "pocket_pct": 62.5
+      },
+      {
+        "name": "Bass",
+        "onsets": 40,
+        "avg_offset_ms": 1.61,
+        "std_offset_ms": 10.81,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 8.93,
+        "ahead_pct": 20.0,
+        "behind_pct": 22.5,
+        "pocket_pct": 57.5
+      }
+    ],
+    "deadband_fit": {
+      "epsilon_ms": 16.67,
+      "delta_ms": 41.67,
+      "coverage": 0.901,
+      "anomaly_rate": 0.0,
+      "genre_match": "Funk",
+      "confidence": 0.23
+    },
+    "proof": {
+      "coverage": 0.901,
+      "variance_collapse": 0.23,
+      "genre_coherence": 0.889,
+      "epsilon_ms": 16.667,
+      "delta_ms": 41.667,
+      "genre_match": "Funk"
+    }
+  },
+  "Hip-Hop": {
+    "file": "hip_hop_groove.mid",
+    "bpm": 90.00009000009,
+    "total_onsets": 152,
+    "tracks": [
+      {
+        "name": "Kick",
+        "onsets": 32,
+        "avg_offset_ms": 2.43,
+        "std_offset_ms": 9.4,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 8.33,
+        "ahead_pct": 9.4,
+        "behind_pct": 28.1,
+        "pocket_pct": 62.5
+      },
+      {
+        "name": "Snare",
+        "onsets": 16,
+        "avg_offset_ms": 4.25,
+        "std_offset_ms": 9.86,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 12.5,
+        "ahead_pct": 6.2,
+        "behind_pct": 31.2,
+        "pocket_pct": 62.5
+      },
+      {
+        "name": "HiHat",
+        "onsets": 64,
+        "avg_offset_ms": 3.99,
+        "std_offset_ms": 13.96,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 14.58,
+        "ahead_pct": 10.9,
+        "behind_pct": 23.4,
+        "pocket_pct": 65.6
+      },
+      {
+        "name": "Bass",
+        "onsets": 40,
+        "avg_offset_ms": 2.33,
+        "std_offset_ms": 14.37,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 12.5,
+        "ahead_pct": 20.0,
+        "behind_pct": 22.5,
+        "pocket_pct": 57.5
+      }
+    ],
+    "deadband_fit": {
+      "epsilon_ms": 22.22,
+      "delta_ms": 55.56,
+      "coverage": 0.901,
+      "anomaly_rate": 0.0,
+      "genre_match": "Hip-hop",
+      "confidence": 0.23
+    },
+    "proof": {
+      "coverage": 0.901,
+      "variance_collapse": 0.23,
+      "genre_coherence": 0.852,
+      "epsilon_ms": 22.222,
+      "delta_ms": 55.556,
+      "genre_match": "Hip-hop"
+    }
+  },
+  "Edm": {
+    "file": "edm_groove.mid",
+    "bpm": 128.0,
+    "total_onsets": 152,
+    "tracks": [
+      {
+        "name": "Kick",
+        "onsets": 32,
+        "avg_offset_ms": -0.31,
+        "std_offset_ms": 1.87,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 2.93,
+        "ahead_pct": 6.2,
+        "behind_pct": 3.1,
+        "pocket_pct": 90.6
+      },
+      {
+        "name": "Snare",
+        "onsets": 16,
+        "avg_offset_ms": 0.31,
+        "std_offset_ms": 2.03,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 2.93,
+        "ahead_pct": 12.5,
+        "behind_pct": 6.2,
+        "pocket_pct": 81.2
+      },
+      {
+        "name": "HiHat",
+        "onsets": 64,
+        "avg_offset_ms": -0.14,
+        "std_offset_ms": 1.99,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 2.93,
+        "ahead_pct": 6.2,
+        "behind_pct": 7.8,
+        "pocket_pct": 85.9
+      },
+      {
+        "name": "Bass",
+        "onsets": 40,
+        "avg_offset_ms": 0.22,
+        "std_offset_ms": 2.03,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 2.93,
+        "ahead_pct": 10.0,
+        "behind_pct": 7.5,
+        "pocket_pct": 82.5
+      }
+    ],
+    "deadband_fit": {
+      "epsilon_ms": 2.93,
+      "delta_ms": 7.32,
+      "coverage": 1.0,
+      "anomaly_rate": 0.0,
+      "genre_match": "EDM",
+      "confidence": 0.0
+    },
+    "proof": {
+      "coverage": 1.0,
+      "variance_collapse": 0.0,
+      "genre_coherence": 0.995,
+      "epsilon_ms": 2.93,
+      "delta_ms": 7.324,
+      "genre_match": "EDM"
+    }
+  },
+  "Latin": {
+    "file": "latin_groove.mid",
+    "bpm": 110.00011000011,
+    "total_onsets": 144,
+    "tracks": [
+      {
+        "name": "Conga",
+        "onsets": 40,
+        "avg_offset_ms": -2.02,
+        "std_offset_ms": 17.48,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 22.16,
+        "ahead_pct": 15.0,
+        "behind_pct": 10.0,
+        "pocket_pct": 75.0
+      },
+      {
+        "name": "Clave",
+        "onsets": 40,
+        "avg_offset_ms": -2.27,
+        "std_offset_ms": 16.61,
+        "swing_factor": 0.36,
+        "pocket_width_ms": 20.45,
+        "ahead_pct": 17.5,
+        "behind_pct": 17.5,
+        "pocket_pct": 65.0
+      },
+      {
+        "name": "Timbales",
+        "onsets": 32,
+        "avg_offset_ms": -1.28,
+        "std_offset_ms": 17.45,
+        "swing_factor": 0.0,
+        "pocket_width_ms": 20.45,
+        "ahead_pct": 12.5,
+        "behind_pct": 12.5,
+        "pocket_pct": 75.0
+      },
+      {
+        "name": "Bass",
+        "onsets": 32,
+        "avg_offset_ms": -0.82,
+        "std_offset_ms": 18.56,
+        "swing_factor": 0.25,
+        "pocket_width_ms": 27.27,
+        "ahead_pct": 6.2,
+        "behind_pct": 9.4,
+        "pocket_pct": 84.4
+      }
+    ],
+    "deadband_fit": {
+      "epsilon_ms": 29.55,
+      "delta_ms": 73.86,
+      "coverage": 0.924,
+      "anomaly_rate": 0.0,
+      "genre_match": "Latin",
+      "confidence": 0.085
+    },
+    "proof": {
+      "coverage": 0.924,
+      "variance_collapse": 0.085,
+      "genre_coherence": 0.97,
+      "epsilon_ms": 29.545,
+      "delta_ms": 73.864,
+      "genre_match": "Latin"
+    }
+  }
+}
