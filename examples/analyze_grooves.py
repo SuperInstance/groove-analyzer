@@ -32,7 +32,7 @@ def main() -> None:
             genre = "Hip-hop"
         gt = extract_microtiming(p)
         fit = fit_deadband(gt)
-        funnel = build_funnel(gt)
+        build_funnel(gt)
         proof = prove_groove_is_deadband(gt)
         timings[genre] = gt
         results[genre] = {

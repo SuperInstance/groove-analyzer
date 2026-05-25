@@ -1,6 +1,5 @@
 """Tests for microtiming extraction."""
 
-import math
 from pathlib import Path
 
 import mido
@@ -115,8 +114,8 @@ def test_prove_groove_is_deadband(tmp_path: Path):
 
 
 def test_jazz_wider_than_edm(tmp_path: Path):
-    edm = synthesize_groove("EDM", bars=4, seed=1, output_path=tmp_path / "e.mid")
-    jazz = synthesize_groove("Jazz", bars=4, seed=1, output_path=tmp_path / "j.mid")
+    synthesize_groove("EDM", bars=4, seed=1, output_path=tmp_path / "e.mid")
+    synthesize_groove("Jazz", bars=4, seed=1, output_path=tmp_path / "j.mid")
     fit_edm = fit_deadband(extract_microtiming(tmp_path / "e.mid"))
     fit_jazz = fit_deadband(extract_microtiming(tmp_path / "j.mid"))
     assert fit_jazz.epsilon_ms > fit_edm.epsilon_ms

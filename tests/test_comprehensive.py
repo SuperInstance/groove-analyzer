@@ -2,36 +2,28 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
-from typing import Dict
 
 import mido
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import given, settings, HealthCheck
 from hypothesis import strategies as st
 
 from groove_analyzer.exceptions import GrooveAnalysisError, InvalidGrooveError
 from groove_analyzer.microtiming import (
-    GrooveTiming,
-    OnsetEvent,
     TimingClass,
     extract_microtiming,
     _snap_to_grid,
     _classify_deviation,
 )
 from groove_analyzer.deadband_groove import (
-    DeadbandFit,
-    EnsembleFunnel,
     fit_deadband,
     build_funnel,
     prove_groove_is_deadband,
 )
 from groove_analyzer.genres import (
     GENRE_PROFILES,
-    GenreProfile,
     synthesize_groove,
-    generate_all_genre_examples,
 )
 
 
