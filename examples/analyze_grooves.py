@@ -135,7 +135,7 @@ def main() -> None:
                     f"genre_coherence={p.get('genre_coherence', 0):.3f}\n")
 
         f.write("\n## Visualisations\n\n")
-        f.write(f"- Genre comparison: `genre_comparison.png`\n")
+        f.write("- Genre comparison: `genre_comparison.png`\n")
         for genre in results:
             f.write(f"- {genre} funnel: `{genre.lower().replace('-', '_')}_funnel.png`\n")
 
